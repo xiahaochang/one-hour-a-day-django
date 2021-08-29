@@ -1,7 +1,7 @@
 '''
 Description: 
 Date: 2021-08-13 16:36:11
-LastEditTime: 2021-08-15 19:52:01
+LastEditTime: 2021-08-29 15:11:37
 LastEditors: xiahaochang
 '''
 
@@ -19,18 +19,32 @@ from django.contrib.auth.models import User
 from django.contrib.auth.decorators import login_required
 # 引入分页模块
 from django.core.paginator import Paginator
+# 引入 Q 对象
+from django.db.models import Q
 
 def article_list(request):
-    # 根据GET请求中查询条件
-    # 返回不同排序的对象数组
-    if request.GET.get('order') == 'total_views':
-        # order_by()方法指定对象如何进行排序。模型中有total_views这个整数字段，
-        # 因此‘total_views’为正序，‘-total_views’为逆序
-        article_list = ArticlePost.objects.all().order_by('-total_views')
-        order = 'total_views'
+    search = request.GET.get('search')
+    order = request.GET.get('order')
+    # 用户搜索逻辑
+    if search:
+        if order == 'total_views':
+            # 用 Q对象 进行联合搜索
+            article_list = ArticlePost.objects.filter(
+                Q(title__icontains=search) |
+                Q(body__icontains=search)
+            ).order_by('-total_views')
+        else:
+            article_list = ArticlePost.objects.filter(
+                Q(title__icontains=search) |
+                Q(body__icontains=search)
+            )
     else:
-        article_list = ArticlePost.objects.all()
-        order = 'normal'
+        # 将 search 参数重置为空
+        search = ''
+        if order == 'total_views':
+            article_list = ArticlePost.objects.all().order_by('-total_views')
+        else:
+            article_list = ArticlePost.objects.all()
 
     # 每页显示 1 篇文章
     paginator = Paginator(article_list, 3)
@@ -39,8 +53,9 @@ def article_list(request):
     # 将导航对象相应的页码内容返回给 articles
     articles = paginator.get_page(page)
 
-     # 修改此行
-    context = { 'articles': articles, 'order': order }
+    # 增加 search 到 context
+    context = {'articles': articles, 'order': order, 'search': search}
+
     return render(request, 'article/list.html', context)
 
 
@@ -54,15 +69,23 @@ def article_detail(request, id):
     article.save(update_fields=['total_views'])
 
     # 将markdown语法渲染成html样式
-    article.body = markdown.markdown(article.body,
+
+    # 修改 Markdown 语法渲染
+    md = markdown.Markdown(
         extensions=[
-        # 包含 缩写、表格等常用扩展
-        'markdown.extensions.extra',
-        # 语法高亮扩展
-        'markdown.extensions.codehilite',
-        ])
+            # 包含 缩写、表格等常用扩展
+            'markdown.extensions.extra',
+            # 语法高亮扩展
+            'markdown.extensions.codehilite',
+            # 目录扩展
+            'markdown.extensions.toc',
+        ]
+    )
+
+    article.body = md.convert(article.body)
     # 需要传递给模板的对象
-    context = { 'article': article }
+    # 新增了md.toc对象
+    context = {'article': article, 'toc': md.toc}
     # 载入模板，并返回context对象
     return render(request, 'article/detail.html', context)
 
