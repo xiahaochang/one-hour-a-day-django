@@ -21,8 +21,16 @@ from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
 
 def article_list(request):
-    # 修改变量名称（articles -> article_list）
-    article_list = ArticlePost.objects.all()
+    # 根据GET请求中查询条件
+    # 返回不同排序的对象数组
+    if request.GET.get('order') == 'total_views':
+        # order_by()方法指定对象如何进行排序。模型中有total_views这个整数字段，
+        # 因此‘total_views’为正序，‘-total_views’为逆序
+        article_list = ArticlePost.objects.all().order_by('-total_views')
+        order = 'total_views'
+    else:
+        article_list = ArticlePost.objects.all()
+        order = 'normal'
 
     # 每页显示 1 篇文章
     paginator = Paginator(article_list, 3)
@@ -31,7 +39,8 @@ def article_list(request):
     # 将导航对象相应的页码内容返回给 articles
     articles = paginator.get_page(page)
 
-    context = { 'articles': articles }
+     # 修改此行
+    context = { 'articles': articles, 'order': order }
     return render(request, 'article/list.html', context)
 
 
